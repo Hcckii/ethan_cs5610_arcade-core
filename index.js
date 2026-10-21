@@ -92,23 +92,27 @@ export function move(board, direction){
 }
 //-----------------------HasMoves logics-------------------------
 
-function compare(board1, board2){
+export function areSameBoard(board1, board2){
     const n = board1.length;
     for(let i=0; i<n; i++){
         for(let j=0; j<n; j++){
             if(board1[i][j]!==board2[i][j]){
-                return true;
+                return false;
             }
         }
     }
-    return false;
+    return true;
+}
+
+export function hasWon(board){
+    return board.some(row => row.some(cell => cell >= 2048));
 }
 
 export function hasMoves(board){
-    return compare(board, move(board, 'left'))
-    ||compare(board, move(board, 'right'))
-    ||compare(board, move(board, 'up'))
-    ||compare(board, move(board, 'down'));
+    return !areSameBoard(board, move(board, 'left'))
+    || !areSameBoard(board, move(board, 'right'))
+    || !areSameBoard(board, move(board, 'up'))
+    || !areSameBoard(board, move(board, 'down'));
 }
 
 //-----------------------Spawn logics-------------------------
@@ -147,7 +151,7 @@ export function score(board, direction){
 }
 
 //-----------------------Display function-------------------------
-export function display(og, res){
+function display(og, res){
     console.log('--------------------------------')
     for(let i=0; i<og.length; i++){
         console.log(og[i], '->', res[i]);
@@ -212,7 +216,7 @@ function mergeTilesToLeft(tiles){
     return {result:res, total:points};
 }
 
-function tilesToBoard(tiles){
+export function tilesToBoard(tiles){
     const res = Array.from({length:4}, ()=>Array(4).fill(0));
     for(const tile of tiles){
         res[tile.row][tile.col] = tile.value;
@@ -220,7 +224,7 @@ function tilesToBoard(tiles){
     return res;
 }
 
-function spawnTile(tiles, id, rng=Math.random){
+export function spawnTile(tiles, id, rng=Math.random){
     const emptySpot = spaces(tilesToBoard(tiles));
     const n = emptySpot.length;
     if(n===0){
@@ -229,7 +233,7 @@ function spawnTile(tiles, id, rng=Math.random){
     const randSpot = Math.floor(rng()*n);
     const [row, col] = emptySpot[randSpot];
     const value = rng()<0.9 ? 2 : 4;
-    const tile = {"id":id, "value":value, "row":row, "col":col};
+    const tile = {id, value, row, col};
     return [...tiles, tile];
 }
 
@@ -239,7 +243,7 @@ function slideTiles(tiles, direction){
     const res = [];
     const validKeys = ["left", "right", "up", "down"];
     if(!validKeys.includes(direction)){
-        throw new Error("Not a valid direction");
+        throw new Error(`Not a valid direction ${direction}`);
     }
     for(let i=0; i<n; i++){
         let line = [];
@@ -275,11 +279,11 @@ function slideTiles(tiles, direction){
     return {result:res, total:points};
 }
 
-function moveTiles(tiles, direction){
+export function moveTiles(tiles, direction){
     return slideTiles(tiles, direction).result;
 }
 
-function scoreTiles(tiles, direction){
+export function scoreTiles(tiles, direction){
     return slideTiles(tiles, direction).total;
 }
 
