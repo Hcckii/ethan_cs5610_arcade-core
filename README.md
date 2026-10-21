@@ -1,3 +1,13 @@
+## 1.1.0
+
+### Added
+- Tile-based API for animation: `moveTiles`, `scoreTiles`, `spawnTile`, `tilesToBoard`.
+  Each tile keeps a stable `id` so a UI can animate it moving across the board.
+- `areSameBoard(board1, board2)` and `hasWon(board)`, moved from the app because they are game rules.
+
+### Changed
+- New tiles are now 2 with 90% probability and 4 with 10%, matching the original game.
+
 # arcade-core
 
 Pure game logic for 2048. Runs in plain Node.js or any browser.
@@ -81,3 +91,4 @@ score earned: 4 (merged 2 and 2)
 - `score` takes a direction because a board alone doesn't record which tiles were just merged, so the points can't be calculated from the board by itself.
 - New tiles are 2 or 4 with a 90/10 chance.
 - No function modifies the board passed in; each returns a new board. `spawn` is random by default, but becomes predictable when you pass a fixed `rng`.
+
