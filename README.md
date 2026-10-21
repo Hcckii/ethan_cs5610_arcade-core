@@ -1,6 +1,6 @@
 # arcade-core
 
-Pure game logic for 2048. runs in plain Node.js or any browser.
+Pure game logic for 2048. Runs in plain Node.js or any browser.
 
 ## Installation
 
@@ -26,7 +26,7 @@ console.log(next[0]); // [4, 0, 0, 0]
 
 ## Board format
 
-Using a 4x4 matrix for the game board, start with 2 or 4 and filled with 0 (empty) for the rest of the spots.
+A board is a 4×4 array of arrays of numbers. `0` means an empty cell; any other number is a tile value.
 
 ## API
 
@@ -43,13 +43,13 @@ Slides all tiles in the given direction and merges equal neighbours once each.
 
 Randomly spawn a 2 or 4 on any empty spot of the board.
 - `board`: a 4×4 array of numbers
-- `rng`:a function Math.random as default
+- `rng` (optional): a function that returns a number between 0 and 1. Defaults to `Math.random`. Pass your own to get predictable results (e.g. for testing).
 - Returns: a new board with new spawned number. The original board is not modified.
 - Throws an error if there's no empty spot available.
 
 ### `hasMoves(board)`
 
-A function that checks if there's a valid move can be made.
+A function that checks whether any move can still be made.
 - `board`: a 4×4 array of numbers
 - Returns: true if a move can be made from any valid directions or false otherwise.
 
@@ -78,6 +78,6 @@ score earned: 4 (merged 2 and 2)
 
 ## Design notes
 
-- I added direction into score is because we couldn't calculate score directly from a single board without making any moves.
-- the percentage of spawning 2 or 4 on a random spot is 50/50.
-- all the function are pure, meaning it will return a copy instead of modify the original board.
+- `score` takes a direction because a board alone doesn't record which tiles were just merged, so the points can't be calculated from the board by itself.
+- New tiles are 2 or 4 with a 50/50 chance.
+- No function modifies the board passed in; each returns a new board. `spawn` is random by default, but becomes predictable when you pass a fixed `rng`.

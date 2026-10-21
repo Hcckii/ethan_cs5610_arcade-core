@@ -129,18 +129,19 @@ function spaces(board){
 export function spawn(board, rng=Math.random){
     const res = board.map(row=>[...row]);
     const canSpawn = spaces(res);
-    if(!(canSpawn.length>0)){
+    if(canSpawn.length===0){
         throw new Error("The board is full");
     }
-    const spawnList = [2,4];
     const n = canSpawn.length;
-    const m = spawnList.length;
     const randSpot = Math.floor(rng()*n);
-    const randNum = Math.floor(rng()*m);
-    const[i, j]=canSpawn[randSpot];
-    res[i][j] = spawnList[randNum];
+    const value = rng()<0.9 ? 2:4;
+    const[i, j] = canSpawn[randSpot];
+    res[i][j] = value;
     return res;
 }
+
+const board=Array.from({length:4}, ()=>Array(4).fill(0));
+console.log(spawn(board));
 //-----------------------Score function-------------------------
 
 export function score(board, direction){
@@ -156,12 +157,16 @@ export function display(og, res){
     console.log('--------------------------------')
 }
 
-const arr2d=[
-[2,2,2,0],
-[0,2,0,2],
-[2,2,4,2],
-[0,0,0,0]];
-console.log(score(arr2d, 'left'));
+//---------------------------------------------------------------------------------------
+
+// const arr2d=[
+// [2,2,2,0],
+// [0,2,0,2],
+// [2,2,4,2],
+// [0,0,0,0]];
+// console.log(score(arr2d, 'left'));
+
+//---------------------------------------------------------------------------------------
 
 // const left = mergeResult2d(arr2d, 'left');
 // const right = mergeResult2d(arr2d, 'right');
@@ -172,3 +177,70 @@ console.log(score(arr2d, 'left'));
 // display(arr2d, right);
 // display(arr2d, up);
 // display(arr2d, down);
+//--------------------------------- Tile Objects ----------------------------------------
+function new_tile(){
+    const tiles = [];
+    const n = 4;
+    let count = 0;
+    for(let i=0; i<n; i++){
+        const row = [];
+        for(let j=0; j<n; j++){
+            const tile = {"id":count, "value":2, "row":i, "col":j};
+            row.push(tile);
+            count++;
+        }
+        tiles.push(row);
+    }
+    return tiles;
+}
+
+function mergeTilesToLeft(tiles){ //merge 2 tiles with same values from 'tiles', reassign id/col and return a new list of tiles + points earned
+    const res = [];
+    let points = 0;
+    let i = 0;
+    let j = 0;
+    let id = tiles[0].id;
+    while(i<tiles.length){
+        if(i+1<tiles.length&&tiles[i].value===tiles[i+1].value){
+            const point = tiles[i].value*2;
+            const merged_tile = {...tiles[i], "value":point, "id":id+j, "col":j};
+            res.push(merged_tile);
+            points += point;
+            j++;
+            i+=2;
+        }
+        else{
+            const new_tile = {...tiles[i], "id":id+j, "col":j};
+            res.push(new_tile);
+            j++;
+            i++;
+        }
+    }
+    return {result:res, total:points};
+}
+
+function padRightTiles(tiles){ //take a tiles.result from merged tiles (without 0) and adding new tile with value 0 on the right
+    console.log(`Tiles:${tiles}`);
+    const n = 4;
+    const m = tiles.length;
+    const id = tiles[0].id;
+    const row = tiles[0].row;
+    for(let i=m; i<n; i++){
+        const tile = {"id":id+i, "value":0, "row":row, "col":i}
+        tiles.push(tile);
+    }
+    return tiles;
+}
+
+// const tiles = new_tile();
+
+// const tile = tiles[2];
+// console.log(tile);
+
+// const mergedTiles = mergeTilesToLeft(tile).result;
+// console.log(mergedTiles);
+
+// const paddedTiles = padRightTiles(mergedTiles);
+// console.log(paddedTiles);
+
+// console.log(mergeTilesToLeft(tile).result);
