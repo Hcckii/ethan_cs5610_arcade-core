@@ -264,11 +264,3 @@ export function moveTiles(tiles, direction){
 export function scoreTiles(tiles, direction){
     return slideTiles(tiles, direction).total;
 }
-
-
-const tiles = new_tile();
-console.log(tiles);
-console.log(moveTiles(tiles, "up"), scoreTiles(tiles, "up"));
-console.log(moveTiles(tiles, "down"));
-console.log(moveTiles(tiles, "left"));
-console.log(moveTiles(tiles, "right"));
