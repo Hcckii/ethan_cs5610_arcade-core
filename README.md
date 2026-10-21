@@ -79,5 +79,5 @@ score earned: 4 (merged 2 and 2)
 ## Design notes
 
 - `score` takes a direction because a board alone doesn't record which tiles were just merged, so the points can't be calculated from the board by itself.
-- New tiles are 2 or 4 with a 50/50 chance.
+- New tiles are 2 or 4 with a 90/10 chance.
 - No function modifies the board passed in; each returns a new board. `spawn` is random by default, but becomes predictable when you pass a fixed `rng`.
