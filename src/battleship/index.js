@@ -156,6 +156,10 @@ function deepCopyBoard(board){
     return board.map((row)=>[...row]);
 }
 
+
+
+
+
 function main(){
     let count1 = 0;
     let count2 = 0;
@@ -165,16 +169,14 @@ function main(){
     const fire2 = newBoard();
     const p1 = newShips(b1);
     const p2 = newShips(b2);
-    let start1 = true;
-    let start2 = false;
     let res1 = deepCopyBoard(fire1);
     let res2 = deepCopyBoard(fire2);
     const o1 = shuffle(newCoords(10));
     const o2 = shuffle(newCoords(10));
-    let remain1 = p1.ships;
-    let remain2 = p2.ships;
+
+
     while(!hasWon(p1.board, res2)&&!hasWon(p2.board, res1)){
-        if(start1){
+        if(turn==="p1"){
             const[x, y] = o1.pop();
             const hitAttempt = fireAt([x, y], res1, p2.board);
             res1 = hitAttempt.board;
@@ -182,14 +184,14 @@ function main(){
                 console.log(`P1 fire at [${x},${y}], P1 hit the target!`)
                 if(isSunk(p2.board, res1, hitAttempt.shipID)){
                     console.log(`P1 has sunk p2's ${allShips[hitAttempt.shipID-1]}!`);
-                    remain2 = remain2.filter((ship)=>ship.type!=`${allShips[hitAttempt.shipID-1]}`);
+                    remain2 = remain2.filter((ship)=>ship.type!==`${allShips[hitAttempt.shipID-1]}`);
                 }
             }
             start1 = false;
             start2 = true;
             count1++;
         }
-        else if(start2){
+        else if(turn==="p2"){
             const[x, y] = o2.pop();
             const hitAttempt = fireAt([x, y], res2, p1.board);
             res2 = hitAttempt.board;
@@ -204,9 +206,10 @@ function main(){
             start1 = true;
             count2++;
         }
+        turn = turn==="p1"?"p2":"p1";
     }
 
-    remain1.length===0?console.log("P2 Won!"):console.log("P1 Won!");
+    hasWon(p1.board, res2)?console.log("P2 Won!"):console.log("P1 Won!");
     console.log("----------------- RESULT FOR P1 ------------------")
     console.log(`Tries:${count1}`);
     console.log("P2 SHIPS:")
@@ -223,13 +226,51 @@ function main(){
 
 
 }
-main();
+
+function main2(){
+    const players = {
+        "p1":{
+            "ships":newShips(newBoard()).board, 
+            "fire":newBoard(),
+            "orders":shuffle(newCoords(10))
+        },
+        "p2":{
+            "ships":newShips(newBoard()).board, 
+            "fire":newBoard(),
+            "orders":shuffle(newCoords(10))
+        }
+    };
+    let turn = "p1";
+    let enemyID = turn==="p1"?"p2":"p1";
+    while(!hasWon(players[turn].ships, players[enemyID].fire)){
+        const me = players[turn];
+        const enemy = players[enemyID];
+        const [x, y] = me.orders.pop();
+        const fireAttempt = fireAt([x, y], me.fire, enemy.ships);
+        me.fire = fireAttempt.board;
+        if(fireAttempt.hit){
+            console.log(`${turn} hit ${enemyID}`);
+            if(isSunk(enemy.ships, me.fire, fireAttempt.shipID)){
+                console.log(`${turn} sunk ${enemyID}'s ${allShips[fireAttempt.shipID-1]}`);
+                console.table(me.fire);
+                console.table(enemy.ships);
+            }
+        }
+        turn = turn==="p1"?"p2":"p1";
+        enemyID = turn==="p1"?"p2":"p1";
+    }
+    console.log(hasWon(players["p1"].ships, players["p2"].fire)?"P2 Won!":"P1 Won!");
+}
 
 
-
-
-
-// const board = newBoard();
-// const fireBoard = newBoard();
-// const b1 = newShips(board);
-// autoHit(b1.board, board);
+export function createGame(){
+    return {
+        "phase":"placement",
+        "turn":"p1",
+        "win":null,
+        "players":{
+            "p1":{"ships":newBoard(),"fire":newBoard()},
+            "p2":{"ships":newBoard(),"fire":newBoard()}
+        }
+    };
+}
