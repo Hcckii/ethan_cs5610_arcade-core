@@ -1,276 +1,318 @@
-//------------------ Initialize functioins --------------------------
+//================== Constants ==================
 
-function newBoard(){
-    const n = 10;
-    const board = Array.from({length:n}, ()=>Array(n).fill(0));
-    return board;
+export const BOARD_SIZE = 10;
+export const size = { carrier: 5, battleship: 4, cruiser: 3, submarine: 3, destroyer: 2 };
+export const allShips = Object.keys(size);
+export const type = Object.fromEntries(allShips.map((name, i) => [name, i + 1]));
+const PLAYERS = ["p1", "p2"];
+
+// Cell values used in getPlayerView's myShots board
+export const UNKNOWN = 0;
+export const MISS = 1;
+export const HIT = 2;
+
+//================== Board helpers ==================
+
+export function newBoard(n = BOARD_SIZE) {
+    return Array.from({ length: n }, () => Array(n).fill(0));
 }
 
+// coord must be [x, y] with integers inside the board
+function inBounds(coord, n) {
+    if (!Array.isArray(coord) || coord.length !== 2) {
+        return false;
+    }
+    const [x, y] = coord;
+    return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < n && y < n;
+}
 
-export const size = {"carrier":5, "battleship":4, "cruiser":3, "submarine":3, "destroyer":2};
-export const allShips = Object.keys(size);
-export const type = Object.fromEntries(allShips.map((name, i)=>[name, i+1]));
+// Check whether a single cell is inside the board and empty
+export function canPlace(coord, board) {
+    if (!inBounds(coord, board.length)) {
+        return false;
+    }
+    const [x, y] = coord;
+    return board[x][y] === 0;
+}
 
-function newCoords(n){
+//================== Ship functions ==================
+
+function isValidShip(ship) {
+    return (
+        typeof ship === "object" &&
+        ship !== null &&
+        allShips.includes(ship.type) &&
+        (ship.orientation === "ver" || ship.orientation === "hor") &&
+        Number.isInteger(ship.row) &&
+        Number.isInteger(ship.col)
+    );
+}
+
+// All cells a ship occupies (assumes the ship is valid)
+function shipCells(ship) {
+    const dr = ship.orientation === "ver" ? 1 : 0;
+    const dc = ship.orientation === "hor" ? 1 : 0;
+    const len = size[ship.type];
+    return Array.from({ length: len }, (_, i) => [ship.row + dr * i, ship.col + dc * i]);
+}
+
+// Return a new board with the ship placed, or null if it can't be placed
+export function generateShip(ship, board) {
+    if (!isValidShip(ship)) {
+        return null;
+    }
+    const cells = shipCells(ship);
+    if (!cells.every((cell) => canPlace(cell, board))) {
+        return null;
+    }
+    const res = board.map((row) => [...row]);
+    const shipID = type[ship.type];
+    for (const [x, y] of cells) {
+        res[x][y] = shipID;
+    }
+    return res;
+}
+
+export function rotate(ship) {
+    return { ...ship, orientation: ship.orientation === "ver" ? "hor" : "ver" };
+}
+
+export function hasPlaced(ship, shipBoard) {
+    const shipID = type[ship.type];
+    return shipBoard.some((row) => row.includes(shipID));
+}
+
+export function removeShip(ship, shipBoard) {
+    const shipID = type[ship.type];
+    return shipBoard.map((row) => row.map((cell) => (cell === shipID ? 0 : cell)));
+}
+
+export function allPlaced(shipBoard) {
+    return allShips.every((name) => hasPlaced({ type: name }, shipBoard));
+}
+
+//================== Fire functions ==================
+
+// Return { board, hit, shipID }, or null if the coord is invalid or already fired
+function fireAt(coord, fireBoard, shipsBoard) {
+    if (!inBounds(coord, shipsBoard.length)) {
+        return null;
+    }
+    const [x, y] = coord;
+    if (fireBoard[x][y] !== 0) {
+        return null;
+    }
+    const resBoard = fireBoard.map((row) => [...row]);
+    resBoard[x][y] = 1;
+    const shipID = shipsBoard[x][y];
+    return { board: resBoard, hit: shipID > 0, shipID };
+}
+
+export function hasWon(shipsBoard, fireBoard) {
+    return shipsBoard.every((row, x) => row.every((cell, y) => cell === 0 || fireBoard[x][y] > 0));
+}
+
+export function isSunk(shipsBoard, fireBoard, shipID) {
+    return shipsBoard.every((row, x) => row.every((cell, y) => cell !== shipID || fireBoard[x][y] > 0));
+}
+
+//================== Game state ==================
+
+export function playerIsValid(playerID) {
+    return PLAYERS.includes(playerID);
+}
+
+function otherPlayer(playerID) {
+    return playerID === "p1" ? "p2" : "p1";
+}
+
+export function createGame() {
+    return {
+        phase: "placement", // "placement" -> "ready" -> "finished"
+        turn: "p1",
+        winner: null,
+        players: {
+            p1: { ships: newBoard(), fire: newBoard(), ready: false },
+            p2: { ships: newBoard(), fire: newBoard(), ready: false },
+        },
+    };
+}
+
+// Place or move a ship. An invalid position removes the ship from the board.
+export function placeShip(game, playerID, ship) {
+    if (!playerIsValid(playerID)) {
+        return { error: "Invalid player" };
+    }
+    if (game.phase !== "placement") {
+        return { error: "Cannot place ship right now" };
+    }
+    if (typeof ship !== "object" || ship === null || !allShips.includes(ship.type)) {
+        return { error: "Invalid ship" };
+    }
+
+    const me = game.players[playerID];
+    if (me.ready) {
+        return { error: "You are already ready" };
+    }
+
+    const cleared = removeShip(ship, me.ships);
+    const placed = generateShip(ship, cleared);
+
+    const newPlayers = {
+        ...game.players,
+        [playerID]: { ...me, ships: placed !== null ? placed : cleared },
+    };
+
+    return {
+        game: { ...game, players: newPlayers },
+        placed: placed !== null,
+    };
+}
+
+export function confirmReady(game, playerID) {
+    if (!playerIsValid(playerID)) {
+        return { error: "Invalid player" };
+    }
+    if (game.phase !== "placement") {
+        return { error: "Cannot get ready right now" };
+    }
+
+    const me = game.players[playerID];
+    if (me.ready) {
+        return { error: "You are already ready" };
+    }
+    if (!allPlaced(me.ships)) {
+        return { error: "Place all ships first" };
+    }
+
+    const newPlayers = {
+        ...game.players,
+        [playerID]: { ...me, ready: true },
+    };
+    const bothReady = PLAYERS.every((id) => newPlayers[id].ready);
+
+    return {
+        game: {
+            ...game,
+            players: newPlayers,
+            phase: bothReady ? "ready" : "placement",
+        },
+    };
+}
+
+export function fire(game, playerID, coord) {
+    if (!playerIsValid(playerID)) {
+        return { error: "Invalid player" };
+    }
+    if (game.phase === "finished") {
+        return { error: "The game has finished" };
+    }
+    if (game.phase !== "ready") {
+        return { error: "Players are not ready" };
+    }
+    if (game.turn !== playerID) {
+        return { error: "Not your turn" };
+    }
+
+    const enemyID = otherPlayer(playerID);
+    const me = game.players[playerID];
+    const enemy = game.players[enemyID];
+
+    const fireAttempt = fireAt(coord, me.fire, enemy.ships);
+    if (fireAttempt === null) {
+        return { error: "Invalid coord" };
+    }
+
+    const win = hasWon(enemy.ships, fireAttempt.board);
+    const sunk = fireAttempt.hit && isSunk(enemy.ships, fireAttempt.board, fireAttempt.shipID);
+
+    const newGame = {
+        ...game,
+        phase: win ? "finished" : game.phase,
+        turn: win ? playerID : enemyID,
+        winner: win ? playerID : null,
+        players: {
+            ...game.players,
+            [playerID]: { ...me, fire: fireAttempt.board },
+        },
+    };
+
+    return { game: newGame, hit: fireAttempt.hit, shipID: fireAttempt.shipID, sunk };
+}
+
+export function getPlayerView(game, playerID) {
+    if (!playerIsValid(playerID)) {
+        return { error: "Invalid player" };
+    }
+    const me = game.players[playerID];
+    const enemy = game.players[otherPlayer(playerID)];
+    const myShots = me.fire.map((row, x) =>
+        row.map((cell, y) => (cell === 0 ? UNKNOWN : enemy.ships[x][y] > 0 ? HIT : MISS))
+    );
+
+    // hasPlaced is needed: an unplaced ship has no cells, so isSunk would be true for it
+    const enemySunk = allShips.filter(
+        (name) => hasPlaced({ type: name }, enemy.ships) && isSunk(enemy.ships, me.fire, type[name])
+    );
+
+    return {
+        playerID,
+        phase: game.phase,
+        turn: game.turn,
+        winner: game.winner,
+        ready: me.ready,
+        enemyReady: enemy.ready,
+        myShips: me.ships,
+        unplaced: allShips.filter((name) => !hasPlaced({ type: name }, me.ships)),
+        enemyShots: enemy.fire,
+        myShots,
+        enemySunk,
+    };
+}
+
+//================== Random helpers ==================
+
+export function newCoords(n = BOARD_SIZE) {
     const res = [];
-    for(let i=0; i<n; i++){
-        for(let j=0; j<n; j++){
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
             res.push([i, j]);
         }
     }
     return res;
 }
 
-//------------------ Ships functions -------------------
-
-function shipCells(ship){
-    if(ship.orientation!=="ver" && ship.orientation!=="hor"){
-        return null;
-    }
-    const dr = ship.orientation === "ver" ? 1:0;
-    const dc = ship.orientation === "hor" ? 1:0;
-    const len = size[ship.type];
-    const res = Array.from({length:len}, (_, i)=>[ship.row+(dr*i), ship.col+(dc*i)]);
-    return res;
-}
-export function generateShip(ship, board){
-    if(ship.orientation!=="ver" && ship.orientation!=="hor"){
-        return null;
-    }
-    const cells = shipCells(ship);
-    if(!cells.every((cell)=>canPlace(cell, board))){
-        return null;
-    }
-    const res = board.map((row)=>[...row]);
-    const shipType = type[ship.type];
-    for(const [x, y] of cells){
-        res[x][y] = shipType;
-    }
-    return res;
-}
-function newShips(board){
-    let resBoard = board.map((row)=>[...row]);
-    const ships = [];
-    while(ships.length<Object.keys(type).length){
-        const [x, y] = randCoord();
-        const orientation = Math.random() < 0.5? "ver": "hor";
-        const ship = {"row":x, "col":y, "type":allShips[ships.length], "orientation":orientation};
-        const b = generateShip(ship, resBoard);
-        if(b!==null){
-            resBoard = b;
-            ships.push(ship)
-        }
-    }
-    return {board:resBoard, ships};
-}
-//------------------ Check wether we can place a ship at the given coordinate -------------------
-export function canPlace(coord, board){
-    const n = board.length;
-    const [x, y] = coord;
-
-    if(x<0 || y<0 || x>n-1 || y>n-1 || board[x][y]!==0){
-        return false;
-    }
-    return true;
-}
-//-------------------------- Rotate the ship object ---------------------------
-function rotate(ship){
-    const res = {...ship, "orientation":ship.orientation==="ver"?"hor":"ver"};
-    return res;
-}
-
-//------------------------- Fire at the given coordinate on the board, return the fire records and hit result ------------------
-function fireAt(coord, fireBoard, shipsBoard){
-    const [x, y] = coord;
-    const n = shipsBoard.length-1;
-    if(x<0 || y<0 || x>n || y>n || fireBoard[x][y]!==0){
-        return null;
-    }
-    let id = 0;
-    let hasHit = false;
-    const resBoard = fireBoard.map((row)=>[...row]);
-    resBoard[x][y] = 1;
-    if(shipsBoard[x][y]>0){
-        hasHit = true;
-        id = shipsBoard[x][y];
-    }
-    return {board:resBoard, hit:hasHit, shipID:id};
-}
-
-function hasWon(shipsBoard, fireBoard){
-    return shipsBoard.every((row, x)=>row.every((cell, y)=>cell===0 || fireBoard[x][y]>0));
-}
-
-function isSunk(shipsBoard, fireBoard, shipID){
-    return shipsBoard.every((row, x)=>row.every((cell, y)=>cell!==shipID || fireBoard[x][y]>0));
-}
-
-//-------------------- Generate random functions ------------------------
-function shuffle(arr){
+// Fisher-Yates shuffle
+export function shuffle(arr) {
     const res = [...arr];
-    for(let i=res.length-1; i>0; i--){
-        const j = Math.floor(Math.random()*(i+1));
+    for (let i = res.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
         [res[i], res[j]] = [res[j], res[i]];
     }
     return res;
 }
 
-function randCoord(){
-    const randX = Math.floor(Math.random()*10);
-    const randY = Math.floor(Math.random()*10);
-    return [randX, randY];
+function randCoord() {
+    return [Math.floor(Math.random() * BOARD_SIZE), Math.floor(Math.random() * BOARD_SIZE)];
 }
 
-//-------------- Testing function -----------------
-
-function autoHit(shipsBoard, fireBoard){
-    let fireRes = fireBoard.map((row)=>[...row]);
-    const coord = newCoords(10);
-    const order = shuffle(coord);
-    for(const o of order){
-        if(hasWon(shipsBoard, fireRes)){
-            break;
-        }
-        const [x, y] = o;
-        const hitAttempt = fireAt([x, y], fireRes, shipsBoard);
-        if(hitAttempt!==null){
-            fireRes = hitAttempt.board;
-            if(hitAttempt.hit){
-                console.log(`Hit enemy ${allShips[hitAttempt.shipID-1]} at [${x},${y}]`)
-                if(isSunk(shipsBoard, fireRes, hitAttempt.shipID)){
-                    console.table(shipsBoard);
-                    console.table(fireRes);
-                    console.log(`Enemy ${allShips[hitAttempt.shipID-1]} has been sunk`);
-                }
-            }
+// Randomly place all ships. Returns { board, ships }
+export function randomShips(board) {
+    let resBoard = board.map((row) => [...row]);
+    const ships = [];
+    while (ships.length < allShips.length) {
+        const [x, y] = randCoord();
+        const ship = {
+            row: x,
+            col: y,
+            type: allShips[ships.length],
+            orientation: Math.random() < 0.5 ? "ver" : "hor",
+        };
+        const next = generateShip(ship, resBoard);
+        if (next !== null) {
+            resBoard = next;
+            ships.push(ship);
         }
     }
-}
-
-
-function playerView(fireBoard){
-    console.table(fireBoard);
-}
-
-function deepCopyBoard(board){
-    return board.map((row)=>[...row]);
-}
-
-
-
-
-
-function main(){
-    let count1 = 0;
-    let count2 = 0;
-    const b1 = newBoard();
-    const b2 = newBoard();
-    const fire1 = newBoard();
-    const fire2 = newBoard();
-    const p1 = newShips(b1);
-    const p2 = newShips(b2);
-    let res1 = deepCopyBoard(fire1);
-    let res2 = deepCopyBoard(fire2);
-    const o1 = shuffle(newCoords(10));
-    const o2 = shuffle(newCoords(10));
-
-
-    while(!hasWon(p1.board, res2)&&!hasWon(p2.board, res1)){
-        if(turn==="p1"){
-            const[x, y] = o1.pop();
-            const hitAttempt = fireAt([x, y], res1, p2.board);
-            res1 = hitAttempt.board;
-            if(hitAttempt.hit){
-                console.log(`P1 fire at [${x},${y}], P1 hit the target!`)
-                if(isSunk(p2.board, res1, hitAttempt.shipID)){
-                    console.log(`P1 has sunk p2's ${allShips[hitAttempt.shipID-1]}!`);
-                    remain2 = remain2.filter((ship)=>ship.type!==`${allShips[hitAttempt.shipID-1]}`);
-                }
-            }
-            start1 = false;
-            start2 = true;
-            count1++;
-        }
-        else if(turn==="p2"){
-            const[x, y] = o2.pop();
-            const hitAttempt = fireAt([x, y], res2, p1.board);
-            res2 = hitAttempt.board;
-            if(hitAttempt.hit){
-                console.log(`P2 fire at [${x},${y}], P2 hit the target!`)
-                if(isSunk(p1.board, res2, hitAttempt.shipID)){
-                    console.log(`P2 has sunk p1's ${allShips[hitAttempt.shipID-1]}!`);
-                    remain1 = remain1.filter((ship)=>ship.type!==`${allShips[hitAttempt.shipID-1]}`);
-                }
-            }
-            start2 = false;
-            start1 = true;
-            count2++;
-        }
-        turn = turn==="p1"?"p2":"p1";
-    }
-
-    hasWon(p1.board, res2)?console.log("P2 Won!"):console.log("P1 Won!");
-    console.log("----------------- RESULT FOR P1 ------------------")
-    console.log(`Tries:${count1}`);
-    console.log("P2 SHIPS:")
-    console.table(p2.board);
-    console.log("P1 Fires:")
-    console.table(res1);
-    console.log("----------------- RESULT FOR P2 ------------------")
-    console.log(`Tries:${count2}`);
-    console.log("P1 SHIPS:")
-    console.table(p1.board);
-    console.log("P2 Fires:")
-    console.table(res2);
-
-
-
-}
-
-function main2(){
-    const players = {
-        "p1":{
-            "ships":newShips(newBoard()).board, 
-            "fire":newBoard(),
-            "orders":shuffle(newCoords(10))
-        },
-        "p2":{
-            "ships":newShips(newBoard()).board, 
-            "fire":newBoard(),
-            "orders":shuffle(newCoords(10))
-        }
-    };
-    let turn = "p1";
-    let enemyID = turn==="p1"?"p2":"p1";
-    while(!hasWon(players[turn].ships, players[enemyID].fire)){
-        const me = players[turn];
-        const enemy = players[enemyID];
-        const [x, y] = me.orders.pop();
-        const fireAttempt = fireAt([x, y], me.fire, enemy.ships);
-        me.fire = fireAttempt.board;
-        if(fireAttempt.hit){
-            console.log(`${turn} hit ${enemyID}`);
-            if(isSunk(enemy.ships, me.fire, fireAttempt.shipID)){
-                console.log(`${turn} sunk ${enemyID}'s ${allShips[fireAttempt.shipID-1]}`);
-                console.table(me.fire);
-                console.table(enemy.ships);
-            }
-        }
-        turn = turn==="p1"?"p2":"p1";
-        enemyID = turn==="p1"?"p2":"p1";
-    }
-    console.log(hasWon(players["p1"].ships, players["p2"].fire)?"P2 Won!":"P1 Won!");
-}
-
-
-export function createGame(){
-    return {
-        "phase":"placement",
-        "turn":"p1",
-        "win":null,
-        "players":{
-            "p1":{"ships":newBoard(),"fire":newBoard()},
-            "p2":{"ships":newBoard(),"fire":newBoard()}
-        }
-    };
+    return { board: resBoard, ships };
 }

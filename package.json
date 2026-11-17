@@ -1,6 +1,6 @@
 {
   "name": "@ethanhua/arcade-core",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "game logic for 2048",
   "keywords": [
     "2048",
@@ -18,11 +18,9 @@
   "author": "Ethan Hua",
   "type": "module",
   "main": "index.js",
-  "scripts": {
-    "test": "node test.js"
-  },
   "exports": "./index.js",
-  "files": [
-    "index.js"
-  ]
+  "files": ["index.js", "2048", "battleship"],
+  "scripts": {
+    "test": "node src/2048/test.js && node src/battleship/test.js"
+  }
 }
