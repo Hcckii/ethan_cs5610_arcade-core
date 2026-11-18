@@ -19,11 +19,7 @@
   "type": "module",
   "main": "index.js",
   "exports": "./index.js",
-  "files": [
-    "index.js",
-    "2048",
-    "battleship"
-  ],
+  "files":["index.js", "src"],
   "scripts": {
     "test": "node src/2048/test.js && node src/battleship/test.js"
   }
