@@ -1,6 +1,6 @@
 {
   "name": "@ethanhua/arcade-core",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "game logic for 2048",
   "keywords": [
     "2048",
