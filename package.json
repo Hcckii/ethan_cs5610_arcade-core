@@ -1,6 +1,6 @@
 {
   "name": "@ethanhua/arcade-core",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "game logic for 2048",
   "keywords": [
     "2048",
@@ -19,7 +19,11 @@
   "type": "module",
   "main": "index.js",
   "exports": "./index.js",
-  "files": ["index.js", "2048", "battleship"],
+  "files": [
+    "index.js",
+    "2048",
+    "battleship"
+  ],
   "scripts": {
     "test": "node src/2048/test.js && node src/battleship/test.js"
   }
