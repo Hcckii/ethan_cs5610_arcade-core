@@ -271,6 +271,29 @@ export function getPlayerView(game, playerID) {
 }
 
 //================== Random helpers ==================
+export function randomPlacement(game, playerID) {
+    if (!playerIsValid(playerID)) {
+      return { error: "Invalid player" };
+    }
+    if (game.phase !== "placement") {
+      return { error: "Cannot place ship right now" };
+    }
+    const me = game.players[playerID];
+    if (me.ready) {
+      return { error: "You are already ready" };
+    }
+  
+    const { board } = randomShips(newBoard());
+    return {
+      game: {
+        ...game,
+        players: {
+          ...game.players,
+          [playerID]: { ...me, ships: board },
+        },
+      },
+    };
+  }
 
 export function newCoords(n = BOARD_SIZE) {
     const res = [];
