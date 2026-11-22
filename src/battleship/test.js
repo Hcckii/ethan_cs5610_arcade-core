@@ -1,93 +1,171 @@
 import {
-    allShips,
-    createGame,
+    BOARD_SIZE,
+    SHIPS,
+    SHIP_NAMES,
+    createEmptyBoard,
+    createRandomBoard,
     placeShip,
-    confirmReady,
-    fire,
-    getPlayerView,
-    randomShips,
-    newBoard,
-    newCoords,
-    shuffle,
+    shipCells,
+    isValidShot,
+    updateBoard,
+    isShipSunk,
+    getSunkShips,
+    isGameComplete,
+    hideShips,
 } from "./index.js";
 
+let failed = 0;
 function check(label, condition) {
+    if (!condition) {
+        failed++;
+    }
     console.log(`${condition ? "PASS" : "FAIL"} - ${label}`);
 }
 
-//---------------- Placement ----------------
-
-const empty = createGame();
-check("cannot fire during placement", fire(empty, "p1", [0, 0]).error === "Players are not ready");
-check("cannot ready before placing all ships", confirmReady(empty, "p1").error === "Place all ships first");
-check("invalid player is rejected", placeShip(empty, "p3", { type: "carrier" }).error === "Invalid player");
-check("invalid ship type is rejected", placeShip(empty, "p1", { type: "boat" }).error === "Invalid ship");
-
-const carrier = { row: 0, col: 0, type: "carrier", orientation: "hor" };
-const g1 = placeShip(empty, "p1", carrier).game;
-
-const moved = placeShip(g1, "p1", { ...carrier, col: 1 });
-check("moving a ship onto its own old cells works", moved.placed === true);
-check("only one carrier after moving", moved.game.players.p1.ships.flat().filter((c) => c === 1).length === 5);
-
-const dropped = placeShip(g1, "p1", { ...carrier, col: 8 });
-check("invalid drop returns placed: false", dropped.placed === false);
-check("invalid drop removes the ship", dropped.game.players.p1.ships.flat().every((c) => c === 0));
-
-check("original game is not modified", g1.players.p1.ships[0][0] === 1);
-
-//---------------- Ready ----------------
-
-let game = createGame();
-for (const id of ["p1", "p2"]) {
-    const { ships } = randomShips(newBoard());
-    for (const ship of ships) {
-        game = placeShip(game, id, ship).game;
-    }
+function seededRandom(seed) {
+    let a = seed;
+    return () => {
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
 }
 
-game = confirmReady(game, "p1").game;
-check("still placement after one player is ready", game.phase === "placement");
-check("cannot move ships after ready", placeShip(game, "p1", carrier).error === "You are already ready");
-
-game = confirmReady(game, "p2").game;
-check("phase is ready after both players", game.phase === "ready");
-
-//---------------- Fire ----------------
-
-check("p2 cannot fire on p1's turn", fire(game, "p2", [0, 0]).error === "Not your turn");
-check("out of bounds coord is rejected", fire(game, "p1", [10, 0]).error === "Invalid coord");
-check("non-integer coord is rejected", fire(game, "p1", [1.5, 0]).error === "Invalid coord");
-
-let t = fire(game, "p1", [0, 0]).game;
-t = fire(t, "p2", [0, 0]).game;
-check("cannot fire at the same cell twice", fire(t, "p1", [0, 0]).error === "Invalid coord");
-
-//---------------- Full game ----------------
-
-const orders = { p1: shuffle(newCoords()), p2: shuffle(newCoords()) };
-const shots = { p1: 0, p2: 0 };
-
-while (game.phase !== "finished") {
-    const id = game.turn;
-    const res = fire(game, id, orders[id].pop());
-    if (res.error) {
-        console.log("Unexpected error:", res.error);
-        break;
-    }
-    game = res.game;
-    shots[id]++;
-    if (res.sunk) {
-        console.log(`  ${id} sunk the enemy's ${allShips[res.shipID - 1]}`);
-    }
+function countCells(board, predicate) {
+    return board.flat().filter(predicate).length;
 }
 
-check("game has a winner", game.winner !== null);
-check("cannot fire after the game finished", fire(game, game.winner, [0, 0]).error === "The game has finished");
 
-const view = getPlayerView(game, game.winner);
-check("view does not contain the full players object", !("players" in view));
-check("winner sees all 5 enemy ships sunk", view.enemySunk.length === 5);
-check("view during placement reports no sunk ships", getPlayerView(createGame(), "p1").enemySunk.length === 0);
+function isStraightLine(cells) {
+    const xs = cells.map(([x]) => x);
+    const ys = cells.map(([, y]) => y);
+    const sameRow = ys.every((y) => y === ys[0]);
+    const sameCol = xs.every((x) => x === xs[0]);
+    const along = sameRow ? xs : ys;
+    const sorted = [...along].sort((a, b) => a - b);
+    return (sameRow || sameCol) && sorted.every((v, i) => i === 0 || v === sorted[i - 1] + 1);
+}
 
-console.log(`Winner: ${game.winner}, shots: p1 = ${shots.p1}, p2 = ${shots.p2}`);
+function cellsOf(board, name) {
+    const res = [];
+    board.forEach((row, y) => row.forEach((cell, x) => cell.ship === name && res.push([x, y])));
+    return res;
+}
+
+//==================== createEmptyBoard ====================
+
+const empty = createEmptyBoard();
+check("empty board is 10x10", empty.length === BOARD_SIZE && empty.every((row) => row.length === BOARD_SIZE));
+check("empty board has no ships and no shots", countCells(empty, (c) => c.ship === null && c.shot === null) === 100);
+
+//==================== createRandomBoard ====================
+
+for (let seed = 1; seed <= 50; seed++) {
+    const board = createRandomBoard(seededRandom(seed));
+    const ok =
+        countCells(board, (c) => c.ship !== null) === 17 &&
+        SHIP_NAMES.every((name) => {
+            const cells = cellsOf(board, name);
+            return cells.length === SHIPS[name] && isStraightLine(cells);
+        });
+    if (!ok) {
+        check(`random board with seed ${seed} has all five ships in straight lines`, false);
+    }
+}
+check("50 random boards all have five ships, 17 cells, in straight lines", true);
+
+check(
+    "the same seed always gives the same board",
+    JSON.stringify(createRandomBoard(seededRandom(42))) === JSON.stringify(createRandomBoard(seededRandom(42)))
+);
+check("default random still works", countCells(createRandomBoard(), (c) => c.ship !== null) === 17);
+
+let threw = false;
+try {
+    createRandomBoard(() => 0);
+} catch {
+    threw = true;
+}
+check("a random function that can't place every ship throws instead of looping forever", threw);
+
+//==================== placeShip ====================
+
+const carrier = { name: "carrier", x: 0, y: 0, direction: "horizontal" };
+const withCarrier = placeShip(empty, carrier);
+check("placeShip returns a new board", withCarrier !== null && withCarrier !== empty);
+check("placeShip does not modify the original board", empty[0][0].ship === null);
+check("carrier covers (0,0) to (4,0)", shipCells(carrier).every(([x, y]) => withCarrier[y][x].ship === "carrier"));
+check("cannot place the same ship twice", placeShip(withCarrier, { ...carrier, y: 5 }) === null);
+check(
+    "cannot overlap another ship",
+    placeShip(withCarrier, { name: "destroyer", x: 2, y: 0, direction: "vertical" }) === null
+);
+check("cannot extend off the board", placeShip(empty, { ...carrier, x: 8 }) === null);
+check("unknown ship name is rejected", placeShip(empty, { ...carrier, name: "boat" }) === null);
+
+//==================== isValidShot and updateBoard ====================
+
+let board = createEmptyBoard();
+board = placeShip(board, { name: "destroyer", x: 3, y: 3, direction: "vertical" }); // (3,3) and (3,4)
+
+check("fresh square is a valid shot", isValidShot(board, 0, 0));
+check("out of bounds is not a valid shot", !isValidShot(board, 10, 0) && !isValidShot(board, -1, 0));
+check("non-integer is not a valid shot", !isValidShot(board, 1.5, 0) && !isValidShot(board, "3", 3));
+
+const missed = updateBoard(board, 0, 0);
+check("updateBoard records a miss on water", missed[0][0].shot === "miss");
+check("updateBoard does not modify the original board", board[0][0].shot === null);
+check("a fired square is no longer a valid shot", !isValidShot(missed, 0, 0));
+
+let threwOnRepeat = false;
+try {
+    updateBoard(missed, 0, 0);
+} catch {
+    threwOnRepeat = true;
+}
+check("updateBoard throws on a repeat shot", threwOnRepeat);
+
+const hit1 = updateBoard(missed, 3, 3);
+check("updateBoard records a hit on a ship", hit1[3][3].shot === "hit");
+check("destroyer is not sunk after one hit", !isShipSunk(hit1, "destroyer"));
+
+const hit2 = updateBoard(hit1, 3, 4);
+check("destroyer is sunk after both hits", isShipSunk(hit2, "destroyer"));
+check("getSunkShips lists the destroyer", JSON.stringify(getSunkShips(hit2)) === JSON.stringify(["destroyer"]));
+check("a ship that isn't on the board is not sunk", !isShipSunk(hit2, "carrier"));
+
+//==================== isGameComplete ====================
+
+check("game is not complete on a fresh random board", !isGameComplete(createRandomBoard(seededRandom(7))));
+check("game is complete once every ship cell is hit", isGameComplete(hit2));
+
+let full = createRandomBoard(seededRandom(9));
+for (let y = 0; y < BOARD_SIZE; y++) {
+    for (let x = 0; x < BOARD_SIZE; x++) {
+        if (full[y][x].ship !== null) {
+            check("game is not complete before the last hit", !isGameComplete(full));
+            full = updateBoard(full, x, y);
+        }
+    }
+}
+check("game is complete after hitting all 17 ship cells", isGameComplete(full));
+
+//==================== hideShips ====================
+
+let partly = createEmptyBoard();
+partly = placeShip(partly, { name: "destroyer", x: 0, y: 0, direction: "horizontal" });
+partly = placeShip(partly, { name: "cruiser", x: 0, y: 2, direction: "horizontal" });
+partly = updateBoard(partly, 0, 0);
+partly = updateBoard(partly, 1, 0); 
+partly = updateBoard(partly, 0, 2); 
+partly = updateBoard(partly, 9, 9);
+
+const hidden = hideShips(partly);
+check("hidden board keeps every shot", hidden[0][0].shot === "hit" && hidden[2][0].shot === "hit" && hidden[9][9].shot === "miss");
+check("hidden board shows the sunk destroyer", hidden[0][0].ship === "destroyer" && hidden[0][1].ship === "destroyer");
+check("hidden board does not reveal the cruiser that isn't sunk", hidden.flat().every((c) => c.ship !== "cruiser"));
+check("hideShips does not modify the original board", partly[2][1].ship === "cruiser");
+
+console.log(failed === 0 ? "\nAll battleship tests passed" : `\n${failed} battleship test(s) failed`);
+process.exitCode = failed > 0 ? 1 : 0;
